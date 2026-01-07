@@ -1,0 +1,5 @@
+{
+  "name": "RPG Hex Calibrator",
+  "description": "A precision tool for Tabletop RPG Masters to overlay, calibrate, and paint hexagonal grids onto existing battlemap images.",
+  "requestFramePermissions": []
+}
