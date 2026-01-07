@@ -266,10 +266,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject, onCreateN
   };
 
   return (
-    <div className="flex flex-col min-h-screen hex-bg text-slate-200 overflow-y-auto">
+    // Fixed: changed min-h-screen to h-screen and added overflow-y-auto to allow internal scrolling on fixed-body layouts
+    <div className="flex flex-col h-screen w-full hex-bg text-slate-200 overflow-y-auto scroll-smooth">
       
       {/* Top Navigation Bar */}
-      <nav className="w-full glass-panel border-b border-white/5 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+      <nav className="w-full glass-panel border-b border-white/5 px-6 py-4 flex justify-between items-center sticky top-0 z-50 shrink-0">
           <div className="flex items-center gap-2">
             <div className="bg-indigo-600 p-1.5 rounded-lg shadow-lg shadow-indigo-500/20">
                 <Grid size={20} className="text-white" />
@@ -316,7 +317,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject, onCreateN
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-12">
         
         {/* --- HERO SECTION --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
             <div className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-semibold uppercase tracking-wider">
                     <span className="relative flex h-2 w-2">
@@ -335,25 +336,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject, onCreateN
                     {t.subtitle}
                 </p>
 
-                {/* Feature Steps */}
-                <div className="flex gap-8 pt-4">
+                {/* Feature Steps / Action Buttons (Interactive Now) */}
+                <div className="flex flex-wrap gap-4 sm:gap-6 pt-6">
                     {[
                         { icon: Upload, label: t.stepUpload },
                         { icon: Grid, label: t.stepCalibrate },
                         { icon: Download, label: t.stepExport }
                     ].map((step, i) => (
-                        <div key={i} className="flex flex-col items-center gap-2 group">
-                            <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-400 group-hover:text-indigo-400 group-hover:border-indigo-500/50 transition-all duration-300">
-                                <step.icon size={20} />
+                        <motion.button 
+                            key={i} 
+                            onClick={onCreateNew}
+                            whileHover={{ y: -5, scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="flex flex-col items-center gap-2 group cursor-pointer focus:outline-none"
+                        >
+                            <div className="p-4 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-slate-700/50 text-slate-400 group-hover:text-white group-hover:bg-indigo-600 group-hover:border-indigo-500 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all duration-300">
+                                <step.icon size={24} />
                             </div>
-                            <span className="text-xs font-medium text-slate-500 group-hover:text-slate-300 transition-colors">{step.label}</span>
-                        </div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 group-hover:text-indigo-300 transition-colors">
+                                {step.label}
+                            </span>
+                        </motion.button>
                     ))}
                 </div>
             </div>
 
             {/* Visual Hook */}
-            <div className="hidden md:flex justify-center md:justify-end">
+            <div className="hidden lg:flex justify-center lg:justify-end">
                 <ScannerHero t={t} />
             </div>
         </div>
