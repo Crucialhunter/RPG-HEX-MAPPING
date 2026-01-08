@@ -138,10 +138,11 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
         
         ctx.beginPath();
         
-        const rStart = centerHex.r - range;
-        const rEnd = centerHex.r + range;
-        const qStart = centerHex.q - range;
-        const qEnd = centerHex.q + range;
+        // Fix: Use Math.floor to ensure loop iterates over integer hex coordinates, aligning visual grid with logic grid.
+        const rStart = Math.floor(centerHex.r - range);
+        const rEnd = Math.floor(centerHex.r + range);
+        const qStart = Math.floor(centerHex.q - range);
+        const qEnd = Math.floor(centerHex.q + range);
 
         for (let q = qStart; q < qEnd; q++) {
             for (let r = rStart; r < rEnd; r++) {
@@ -594,4 +595,4 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
         </div>
     </div>
   );
-};
+}
