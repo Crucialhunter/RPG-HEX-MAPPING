@@ -1,13 +1,15 @@
+
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Move, Paintbrush, Eraser, MapPin, Box, Ruler, 
+  Paintbrush, Eraser, MapPin, Box, Ruler, 
   Settings, Download, Upload, ArrowLeft, CheckCircle2, 
-  RotateCcw, RotateCw, Loader2, Eye, EyeOff, X, Palette,
-  Grid as GridIcon, Image as ImageIcon, Hand, Crosshair,
-  ShieldAlert, Tent, Swords, Gem, Castle
+  RotateCcw, RotateCw, Loader2, Eye, EyeOff,
+  Grid as GridIcon, Image as ImageIcon, Hand, 
+  ShieldAlert, Tent, Swords, Gem, Castle, Edit3, Droplets, Mountain, Ban, X,
+  Hexagon, Square, Triangle
 } from 'lucide-react';
-import { GridConfig, EditorTool, Viewport, Asset, NavigationMode, ASSET_LIBRARY, AssetCategory } from '../types';
+import { GridConfig, EditorTool, Viewport, HexState, NavigationMode, ASSET_LIBRARY, AssetCategory, GridType } from '../types';
 
 interface ControlsProps {
   config: GridConfig;
@@ -32,6 +34,16 @@ interface ControlsProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  
+  // Phase 1 New Props
+  activeTerrain: HexState;
+  setActiveTerrain: React.Dispatch<React.SetStateAction<HexState>>;
+  brushSize: number;
+  setBrushSize: React.Dispatch<React.SetStateAction<number>>;
+  activeMarkerColor: string;
+  setActiveMarkerColor: React.Dispatch<React.SetStateAction<string>>;
+  projectName: string;
+  setProjectName: React.Dispatch<React.SetStateAction<string>>;
 }
 
 // --- SUB-COMPONENTS ---
@@ -88,11 +100,16 @@ export const Controls: React.FC<ControlsProps> = ({
   activeTool, setActiveTool,
   activeLabel, setActiveLabel,
   activeAssetType, setActiveAssetType,
-  saveStatus, canUndo, canRedo, onUndo, onRedo
+  saveStatus, canUndo, canRedo, onUndo, onRedo,
+  activeTerrain, setActiveTerrain,
+  brushSize, setBrushSize,
+  activeMarkerColor, setActiveMarkerColor,
+  projectName, setProjectName
 }) => {
   const [zenMode, setZenMode] = useState(false);
   const [showGridSettings, setShowGridSettings] = useState(false);
   const [assetCategory, setAssetCategory] = useState<AssetCategory>('structure');
+  const [isEditingName, setIsEditingName] = useState(false);
 
   // Tools list
   const tools = [
@@ -120,7 +137,7 @@ export const Controls: React.FC<ControlsProps> = ({
 
   const vpRectW = imageDimensions ? (window.innerWidth / viewport.zoom) / imageDimensions.width * mmW : 0;
   const vpRectH = imageDimensions ? (window.innerHeight / viewport.zoom) / imageDimensions.height * mmH : 0;
-  const vpRectX = imageDimensions ? (-viewport.x / viewport.zoom) / imageDimensions.width * mmW : 0;
+  const vpRectX = imageDimensions ? (-viewport.y / viewport.zoom) / imageDimensions.height * mmH : 0;
   const vpRectY = imageDimensions ? (-viewport.y / viewport.zoom) / imageDimensions.height * mmH : 0;
 
   return (
@@ -142,7 +159,31 @@ export const Controls: React.FC<ControlsProps> = ({
                 >
                   <ArrowLeft size={20} />
                 </button>
-                <div className="flex items-center gap-2 bg-slate-900/50 backdrop-blur border border-white/10 px-3 py-1.5 rounded-full">
+                
+                {/* Project Name Editor */}
+                <div className="group relative">
+                    {isEditingName ? (
+                        <input 
+                            autoFocus
+                            type="text" 
+                            value={projectName} 
+                            onChange={(e) => setProjectName(e.target.value)}
+                            onBlur={() => setIsEditingName(false)}
+                            onKeyDown={(e) => e.key === 'Enter' && setIsEditingName(false)}
+                            className="bg-slate-800 border border-indigo-500 rounded px-2 py-1 text-sm font-bold text-white outline-none min-w-[200px]"
+                        />
+                    ) : (
+                        <div 
+                            onClick={() => setIsEditingName(true)}
+                            className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-900/50 cursor-pointer transition-colors"
+                        >
+                            <span className="text-sm font-bold text-slate-200 font-cinzel tracking-wide">{projectName}</span>
+                            <Edit3 size={12} className="text-slate-500 opacity-0 group-hover:opacity-100" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2 bg-slate-900/50 backdrop-blur border border-white/10 px-3 py-1.5 rounded-full ml-2">
                   {saveStatus === "Saved" ? (
                     <CheckCircle2 size={16} className="text-emerald-400" />
                   ) : saveStatus === "Saving..." ? (
@@ -175,14 +216,6 @@ export const Controls: React.FC<ControlsProps> = ({
                     >
                         <ImageIcon size={16} /> <span className="hidden sm:inline">Image</span>
                     </button>
-                </div>
-                {/* Instruction Tag */}
-                <div className="text-center mt-2">
-                    <span className="inline-block px-2 py-0.5 bg-black/60 rounded text-[10px] text-indigo-300 font-mono">
-                        {navMode === NavigationMode.VIEW && "Drag to Pan • Scroll to Zoom"}
-                        {navMode === NavigationMode.GRID && "Drag to Move Grid • Scroll to Rotate"}
-                        {navMode === NavigationMode.IMAGE && "Drag to Move Image • Scroll to Zoom"}
-                    </span>
                 </div>
               </div>
 
@@ -255,6 +288,34 @@ export const Controls: React.FC<ControlsProps> = ({
                         
                         {navMode === NavigationMode.GRID && (
                             <div className="space-y-4">
+                                {/* GRID SHAPE SELECTOR */}
+                                <div className="bg-slate-950/50 p-2 rounded-lg border border-slate-700/50">
+                                    <label className="text-xs text-slate-500 font-bold block mb-2 uppercase tracking-wide">Grid Shape</label>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => handleChange('type', GridType.HEX_FLAT)}
+                                            className={`flex-1 p-2 rounded flex items-center justify-center transition-colors ${config.type === GridType.HEX_FLAT ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                            title="Hexagonal"
+                                        >
+                                            <Hexagon size={18} />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleChange('type', GridType.SQUARE)}
+                                            className={`flex-1 p-2 rounded flex items-center justify-center transition-colors ${config.type === GridType.SQUARE ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                            title="Square"
+                                        >
+                                            <Square size={18} />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleChange('type', GridType.TRIANGLE)}
+                                            className={`flex-1 p-2 rounded flex items-center justify-center transition-colors ${config.type === GridType.TRIANGLE ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                            title="Triangle"
+                                        >
+                                            <Triangle size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                                
                                 <div>
                                     <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Rotation</span> <span>{config.rotation.toFixed(1)}°</span></div>
                                     <input 
@@ -307,26 +368,108 @@ export const Controls: React.FC<ControlsProps> = ({
                     {/* Tool Specific Controls */}
                     {navMode === NavigationMode.VIEW && (
                         <div className="space-y-4">
-                        {(activeTool === EditorTool.PAINT || activeTool === EditorTool.ERASE) && (
-                            <div>
-                                <div className="flex gap-2 mb-2">
-                                <div className="h-8 w-8 bg-red-500/50 rounded ring-1 ring-white/10 cursor-pointer hover:scale-110 transition-transform" onClick={() => {}} title="Blocked"></div>
-                                <div className="h-8 w-8 bg-yellow-500/50 rounded ring-1 ring-white/10 cursor-pointer hover:scale-110 transition-transform" title="Difficult"></div>
-                                <div className="h-8 w-8 bg-blue-500/50 rounded ring-1 ring-white/10 cursor-pointer hover:scale-110 transition-transform" title="Water"></div>
+                        
+                        {activeTool === EditorTool.PAINT && (
+                            <div className="space-y-4">
+                                {/* Terrain Palette */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button 
+                                        onClick={() => setActiveTerrain(HexState.BLOCKED)}
+                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${activeTerrain === HexState.BLOCKED ? 'bg-red-500/20 border-red-500 text-red-300' : 'bg-slate-800 border-transparent text-slate-400 hover:bg-slate-700'}`}
+                                    >
+                                        <Ban size={14} /> Blocked
+                                    </button>
+                                    <button 
+                                        onClick={() => setActiveTerrain(HexState.DIFFICULT)}
+                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${activeTerrain === HexState.DIFFICULT ? 'bg-yellow-500/20 border-yellow-500 text-yellow-300' : 'bg-slate-800 border-transparent text-slate-400 hover:bg-slate-700'}`}
+                                    >
+                                        <Mountain size={14} /> Difficult
+                                    </button>
+                                    <button 
+                                        onClick={() => setActiveTerrain(HexState.WATER)}
+                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${activeTerrain === HexState.WATER ? 'bg-blue-500/20 border-blue-500 text-blue-300' : 'bg-slate-800 border-transparent text-slate-400 hover:bg-slate-700'}`}
+                                    >
+                                        <Droplets size={14} /> Water
+                                    </button>
+                                    <button 
+                                        onClick={() => setActiveTerrain(HexState.EMPTY)}
+                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${activeTerrain === HexState.EMPTY ? 'bg-slate-500/20 border-slate-500 text-slate-300' : 'bg-slate-800 border-transparent text-slate-400 hover:bg-slate-700'}`}
+                                    >
+                                        <X size={14} /> Clear
+                                    </button>
+                                </div>
+                                
+                                {/* Brush Size */}
+                                <div>
+                                    <div className="flex justify-between text-xs mb-1 text-slate-400">
+                                        <span>Brush Size</span> 
+                                        <span className="text-white">{brushSize === 1 ? '1x (Single)' : brushSize === 2 ? '2x (Medium)' : '3x (Large)'}</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="1" max="3" step="1"
+                                        value={brushSize} 
+                                        onChange={(e) => setBrushSize(Number(e.target.value))} 
+                                        className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
+                                    />
+                                    <div className="flex justify-between px-1 mt-1">
+                                        <div className={`w-2 h-2 rounded-full ${brushSize >= 1 ? 'bg-indigo-500' : 'bg-slate-700'}`} />
+                                        <div className={`w-3 h-3 rounded-full ${brushSize >= 2 ? 'bg-indigo-500' : 'bg-slate-700'}`} />
+                                        <div className={`w-4 h-4 rounded-full ${brushSize >= 3 ? 'bg-indigo-500' : 'bg-slate-700'}`} />
+                                    </div>
                                 </div>
                             </div>
                         )}
 
+                        {activeTool === EditorTool.ERASE && (
+                             <div>
+                                <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg mb-4 text-xs text-red-300 flex gap-2">
+                                    <Eraser size={16} className="shrink-0" />
+                                    <span>Removes the hex from the grid entirely. Use "Clear" in Paint mode to just reset terrain.</span>
+                                </div>
+                                <div className="flex justify-between text-xs mb-1 text-slate-400">
+                                    <span>Eraser Size</span> 
+                                    <span className="text-white">{brushSize === 1 ? 'Single' : 'Cluster'}</span>
+                                </div>
+                                <input 
+                                    type="range" min="1" max="3" step="1"
+                                    value={brushSize} 
+                                    onChange={(e) => setBrushSize(Number(e.target.value))} 
+                                    className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500" 
+                                />
+                            </div>
+                        )}
+
                         {activeTool === EditorTool.LABEL && (
-                            <div>
-                            <label className="text-xs text-slate-400 mb-1 block">Marker Label</label>
-                            <input 
-                                type="text" 
-                                value={activeLabel} 
-                                onChange={(e) => setActiveLabel(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm focus:border-indigo-500 outline-none transition-colors"
-                                maxLength={3}
-                            />
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-xs text-slate-400 mb-1 block">Marker Label</label>
+                                    <input 
+                                        type="text" 
+                                        value={activeLabel} 
+                                        onChange={(e) => setActiveLabel(e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm focus:border-indigo-500 outline-none transition-colors font-medieval tracking-widest"
+                                        maxLength={3}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-400 mb-1 block">Color</label>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {['#ffffff', '#ef4444', '#eab308', '#22c55e', '#3b82f6', '#a855f7'].map(c => (
+                                            <button
+                                                key={c}
+                                                onClick={() => setActiveMarkerColor(c)}
+                                                className={`w-6 h-6 rounded-full border-2 transition-all ${activeMarkerColor === c ? 'border-white scale-110' : 'border-transparent hover:scale-110'}`}
+                                                style={{ backgroundColor: c }}
+                                            />
+                                        ))}
+                                        <input 
+                                            type="color" 
+                                            value={activeMarkerColor}
+                                            onChange={(e) => setActiveMarkerColor(e.target.value)}
+                                            className="w-6 h-6 rounded-full overflow-hidden cursor-pointer border-none p-0 bg-transparent"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -343,20 +486,31 @@ export const Controls: React.FC<ControlsProps> = ({
                                     <button onClick={() => setAssetCategory('nature')} className={`p-1.5 rounded ${assetCategory === 'nature' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`} title="Nature"><Tent size={14} /></button>
                                 </div>
 
-                                {/* Asset Grid */}
+                                {/* Asset Grid - UPDATED FOR SVG RENDERING */}
                                 <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1 pr-2">
                                 {filteredAssets.map(def => (
                                     <button
                                     key={def.id}
                                     onClick={() => setActiveAssetType(def.id)}
                                     title={def.label}
-                                    className={`aspect-square rounded flex items-center justify-center text-xl border transition-all relative group
+                                    className={`aspect-square rounded flex items-center justify-center p-2 border transition-all relative group
                                         ${activeAssetType === def.id 
                                             ? 'bg-indigo-500/20 border-indigo-500 scale-105 shadow-[0_0_10px_rgba(99,102,241,0.3)]' 
                                             : 'bg-slate-800 border-transparent hover:border-slate-600 hover:scale-105'
                                         }`}
                                     >
-                                        <span style={{ textShadow: `0 0 10px ${def.color}` }}>{def.icon}</span>
+                                        <svg 
+                                          viewBox={def.viewBox || "0 0 24 24"} 
+                                          className="w-full h-full drop-shadow-lg"
+                                          style={{ 
+                                            stroke: def.color,
+                                            strokeWidth: 2,
+                                            fill: 'none',
+                                            filter: `drop-shadow(0 0 2px ${def.color})`
+                                          }}
+                                        >
+                                          <path d={def.path} strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
                                     </button>
                                 ))}
                                 </div>

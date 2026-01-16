@@ -1,6 +1,8 @@
+
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GridConfig, HexState, EditorTool, getHexKey, parseHexKey, Viewport, Marker, Asset, NavigationMode, Point, ASSET_LIBRARY } from '../types';
-import { hexToPixel, pixelToHex, getHexCorners, screenToWorld, getHexDistance } from '../utils/hexMath';
+import { screenToWorld } from '../utils/hexMath'; // Still used for screenToWorld projection
+import { GridSystem } from '../utils/gridSystem';
 
 interface HexCanvasProps {
   image: HTMLImageElement | null;
@@ -23,6 +25,10 @@ interface HexCanvasProps {
   activeAssetType: string;
   exportRef: React.MutableRefObject<{ exportGridOnly: () => void, exportComposite: () => void } | null>;
   onDataChange?: (data: Map<string, HexState>) => void;
+  // Phase 1 New Props
+  activeTerrain: HexState;
+  brushSize: number;
+  activeMarkerColor: string;
 }
 
 export const HexCanvas: React.FC<HexCanvasProps> = ({
@@ -45,7 +51,10 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
   activeLabel,
   activeAssetType,
   exportRef,
-  onDataChange
+  onDataChange,
+  activeTerrain,
+  brushSize,
+  activeMarkerColor
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -78,33 +87,46 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
   }, [image]);
 
   // --- 2. Dynamic Layer: Grid & UI ---
-  const drawHexPath = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) => {
-    const corners = getHexCorners({ x, y }, radius, config.rotation); // Pass rotation here
+  const drawPolyPath = (ctx: CanvasRenderingContext2D, center: Point, coord: {q: number, r: number}) => {
+    const corners = GridSystem.getCorners(center, config.radius, config.rotation, config, coord); 
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);
-    for (let i = 1; i < 6; i++) {
+    for (let i = 1; i < corners.length; i++) {
       ctx.lineTo(corners[i].x, corners[i].y);
     }
     ctx.closePath();
   };
 
-  const drawAsset = (ctx: CanvasRenderingContext2D, x: number, y: number, typeId: string) => {
+  // Phase 2: SVG Path Rendering
+  const drawAsset = (ctx: CanvasRenderingContext2D, x: number, y: number, typeId: string, radius: number) => {
       const assetDef = ASSET_LIBRARY[typeId];
       if (!assetDef) return;
 
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      const size = radius * 1.5; 
+      const scale = (size / 24) * (assetDef.scale || 1); // Base SVG is 24x24
       
-      // Draw Glow
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.translate(-12, -12); // Center the 24x24 icon
+
+      // Glow / Shadow
       ctx.shadowColor = assetDef.color;
       ctx.shadowBlur = 10;
+      ctx.strokeStyle = assetDef.color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
       
-      // Draw Icon
-      ctx.font = `${config.radius * 1.2}px sans-serif`;
-      ctx.fillText(assetDef.icon, x, y);
+      const p = new Path2D(assetDef.path);
+      ctx.stroke(p);
+
+      // Highlighting inner
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.stroke(p);
       
-      // Reset Shadow
-      ctx.shadowBlur = 0;
+      ctx.restore();
   };
 
   const drawGridLayer = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number, isExport = false) => {
@@ -133,30 +155,27 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
         const centerX = image ? (imageOrigin.x + refWidth/2) : (width/2 - viewport.x)/viewport.zoom;
         const centerY = image ? (imageOrigin.y + refHeight/2) : (height/2 - viewport.y)/viewport.zoom;
 
-        const range = Math.max(refWidth, refHeight) / radius + 10;
-        const centerHex = pixelToHex(centerX, centerY, config);
+        const centerCell = GridSystem.getGridCoordinates(centerX, centerY, config);
+        // Approximate range based on size. Hex/Square/Tri have different densities.
+        const range = Math.ceil(Math.max(refWidth, refHeight) / radius) + 5;
         
         ctx.beginPath();
         
-        // Fix: Use Math.floor to ensure loop iterates over integer hex coordinates, aligning visual grid with logic grid.
-        const rStart = Math.floor(centerHex.r - range);
-        const rEnd = Math.floor(centerHex.r + range);
-        const qStart = Math.floor(centerHex.q - range);
-        const qEnd = Math.floor(centerHex.q + range);
+        // Generic Loop that works for all grids (bounding box iteration)
+        const rangeList = GridSystem.getNeighbors(centerCell, range, config);
 
-        for (let q = qStart; q < qEnd; q++) {
-            for (let r = rStart; r < rEnd; r++) {
-                const key = getHexKey(q, r);
-                if (hexData.get(key) === HexState.HIDDEN) continue; 
-                
-                const center = hexToPixel(q, r, config); 
-                const corners = getHexCorners(center, radius, config.rotation);
-                
-                ctx.moveTo(corners[0].x, corners[0].y);
-                for(let i=1; i<6; i++) ctx.lineTo(corners[i].x, corners[i].y);
-                ctx.lineTo(corners[0].x, corners[0].y);
-            }
-        }
+        rangeList.forEach(cell => {
+            const key = getHexKey(cell.q, cell.r);
+            if (hexData.get(key) === HexState.HIDDEN) return;
+
+            const center = GridSystem.getPixelCoordinates(cell.q, cell.r, config);
+            const corners = GridSystem.getCorners(center, radius, config.rotation, config, cell);
+            
+            ctx.moveTo(corners[0].x, corners[0].y);
+            for(let i=1; i<corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+            ctx.lineTo(corners[0].x, corners[0].y);
+        });
+        
         ctx.stroke();
     }
     ctx.globalAlpha = 1.0;
@@ -165,9 +184,9 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
     hexData.forEach((state, key) => {
         if (state === HexState.HIDDEN || state === HexState.EMPTY) return;
         const { q, r } = parseHexKey(key);
-        const center = hexToPixel(q, r, config);
+        const center = GridSystem.getPixelCoordinates(q, r, config);
         
-        drawHexPath(ctx, center.x, center.y, radius);
+        drawPolyPath(ctx, center, {q,r});
         
         if (state === HexState.BLOCKED) {
             ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
@@ -187,36 +206,37 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
         const refHeight = image ? image.height : height / viewport.zoom;
         const centerX = image ? (imageOrigin.x + refWidth/2) : (width/2 - viewport.x)/viewport.zoom;
         const centerY = image ? (imageOrigin.y + refHeight/2) : (height/2 - viewport.y)/viewport.zoom;
-        const centerHex = pixelToHex(centerX, centerY, config);
-        const range = 20; 
+        const centerCell = GridSystem.getGridCoordinates(centerX, centerY, config);
+        
+        // Limit coordinates drawing to a smaller view area for performance
+        const range = 15; 
+        const visibleCells = GridSystem.getNeighbors(centerCell, range, config);
 
         ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
         ctx.font = `${radius * 0.4}px monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        for (let q = centerHex.q - range; q < centerHex.q + range; q++) {
-            for (let r = centerHex.r - range; r < centerHex.r + range; r++) {
-                 const key = getHexKey(q, r);
-                 if (hexData.get(key) === HexState.HIDDEN) continue;
-                 const center = hexToPixel(q, r, config);
-                 ctx.fillText(`${q},${r}`, center.x, center.y);
-            }
-        }
+        visibleCells.forEach(cell => {
+             const key = getHexKey(cell.q, cell.r);
+             if (hexData.get(key) === HexState.HIDDEN) return;
+             const center = GridSystem.getPixelCoordinates(cell.q, cell.r, config);
+             ctx.fillText(`${cell.q},${cell.r}`, center.x, center.y);
+        });
     }
 
     // D. Assets & Markers
     assets.forEach((asset, key) => {
         if (hexData.get(key) === HexState.HIDDEN) return;
         const { q, r } = parseHexKey(key);
-        const center = hexToPixel(q, r, config);
-        drawAsset(ctx, center.x, center.y, asset.type);
+        const center = GridSystem.getPixelCoordinates(q, r, config);
+        drawAsset(ctx, center.x, center.y, asset.type, radius);
     });
 
     markers.forEach((marker, key) => {
         if (hexData.get(key) === HexState.HIDDEN) return;
         const { q, r } = parseHexKey(key);
-        const center = hexToPixel(q, r, config);
+        const center = GridSystem.getPixelCoordinates(q, r, config);
         
         ctx.fillStyle = "rgba(0,0,0,0.8)";
         ctx.beginPath();
@@ -227,10 +247,10 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
         ctx.stroke();
 
         ctx.fillStyle = marker.color || '#fff';
-        ctx.font = 'bold 12px sans-serif';
+        ctx.font = 'bold 16px "MedievalSharp", cursive';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(marker.text, center.x, center.y - radius/2);
+        ctx.fillText(marker.text, center.x, center.y - radius/2 + 2); 
     });
 
     // E. Tool Previews
@@ -238,26 +258,41 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
          const isToolMode = navMode === NavigationMode.VIEW;
          
          if (isToolMode) {
-            const { q, r } = parseHexKey(hoverHex);
-            const center = hexToPixel(q, r, config);
-            drawHexPath(ctx, center.x, center.y, radius);
-            ctx.lineWidth = 3;
+            const centerCell = parseHexKey(hoverHex);
             
+            // Phase 1: Brush Size Logic for Preview - Now uses GridSystem
+            let targets = [centerCell];
+            if ((activeTool === EditorTool.PAINT || activeTool === EditorTool.ERASE) && brushSize > 1) {
+                targets = GridSystem.getNeighbors(centerCell, brushSize - 1, config);
+            }
+            
+            ctx.lineWidth = 3;
             if (activeTool === EditorTool.ERASE) ctx.strokeStyle = '#ef4444';
             else if (activeTool === EditorTool.LABEL) ctx.strokeStyle = '#22c55e';
             else if (activeTool === EditorTool.ASSET) ctx.strokeStyle = '#d97706';
-            else if (activeTool === EditorTool.PAINT) ctx.strokeStyle = '#6366f1';
+            else if (activeTool === EditorTool.PAINT) {
+                // Color match preview
+                 if (activeTerrain === HexState.BLOCKED) ctx.strokeStyle = '#ef4444';
+                 else if (activeTerrain === HexState.DIFFICULT) ctx.strokeStyle = '#eab308';
+                 else if (activeTerrain === HexState.WATER) ctx.strokeStyle = '#3b82f6';
+                 else ctx.strokeStyle = '#64748b'; // Clear
+            }
             else if (activeTool === EditorTool.RULER) ctx.strokeStyle = '#ec4899';
             else ctx.strokeStyle = '#fff';
-            
-            ctx.stroke();
+
+            // Draw all target cells in the brush
+            targets.forEach(cell => {
+                const center = GridSystem.getPixelCoordinates(cell.q, cell.r, config);
+                drawPolyPath(ctx, center, cell);
+                ctx.stroke();
+            });
          }
     }
 
     // F. Ruler
     if (!isExport && rulerStart && rulerCurrent) {
-       const startPx = hexToPixel(rulerStart.q, rulerStart.r, config);
-       const endPx = hexToPixel(rulerCurrent.q, rulerCurrent.r, config);
+       const startPx = GridSystem.getPixelCoordinates(rulerStart.q, rulerStart.r, config);
+       const endPx = GridSystem.getPixelCoordinates(rulerCurrent.q, rulerCurrent.r, config);
        
        ctx.beginPath();
        ctx.moveTo(startPx.x, startPx.y);
@@ -274,8 +309,8 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
        ctx.arc(endPx.x, endPx.y, 6, 0, Math.PI*2);
        ctx.fill();
 
-       const distHexes = getHexDistance(rulerStart, rulerCurrent);
-       const distFeet = distHexes * 5; 
+       const distUnits = GridSystem.getDistance(rulerStart, rulerCurrent, config);
+       const distFeet = distUnits * 5; 
        
        const midX = (startPx.x + endPx.x) / 2;
        const midY = (startPx.y + endPx.y) / 2;
@@ -294,11 +329,11 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
        ctx.font = 'bold 14px sans-serif';
        ctx.textAlign = 'center';
        ctx.textBaseline = 'middle';
-       ctx.fillText(`${distHexes} Hex / ${distFeet}ft`, 0, 0);
+       ctx.fillText(`${distUnits.toFixed(1)} Units / ${distFeet.toFixed(1)}ft`, 0, 0);
        ctx.restore();
     }
 
-  }, [image, config, hexData, assets, markers, hoverHex, activeTool, rulerStart, rulerCurrent, viewport, imageOrigin, navMode]);
+  }, [image, config, hexData, assets, markers, hoverHex, activeTool, rulerStart, rulerCurrent, viewport, imageOrigin, navMode, activeTerrain, brushSize]);
 
   // --- Animation Loop ---
   useEffect(() => {
@@ -423,11 +458,11 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
             if (containerRef.current) {
                 const rect = containerRef.current.getBoundingClientRect();
                 const world = screenToWorld(e.clientX, e.clientY, viewport, rect);
-                const hex = pixelToHex(world.x, world.y, config);
+                const cell = GridSystem.getGridCoordinates(world.x, world.y, config);
                 
                 if (activeTool === EditorTool.RULER) {
-                    setRulerStart(hex);
-                    setRulerCurrent(hex);
+                    setRulerStart(cell);
+                    setRulerCurrent(cell);
                 } else {
                     applyTool(e);
                 }
@@ -454,7 +489,7 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
           if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             const world = screenToWorld(e.clientX, e.clientY, viewport, rect);
-            const { q, r } = pixelToHex(world.x, world.y, config);
+            const { q, r } = GridSystem.getGridCoordinates(world.x, world.y, config);
             const key = getHexKey(q, r);
             if (hoverHex !== key) setHoverHex(key);
           }
@@ -487,14 +522,20 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
           }));
       }
       else if (dragRef.current.type === 'tool') {
-          if (activeTool === EditorTool.RULER && rulerStart && containerRef.current) {
-              const rect = containerRef.current.getBoundingClientRect();
-              const world = screenToWorld(e.clientX, e.clientY, viewport, rect);
-              const { q, r } = pixelToHex(world.x, world.y, config);
-              setRulerCurrent({q, r});
-          }
-          else if (activeTool === EditorTool.PAINT || activeTool === EditorTool.ERASE) {
-              applyTool(e);
+          // FIX FOR HOVER BUG: Update hover hex while dragging tool
+          if (containerRef.current) {
+               const rect = containerRef.current.getBoundingClientRect();
+               const world = screenToWorld(e.clientX, e.clientY, viewport, rect);
+               const { q, r } = GridSystem.getGridCoordinates(world.x, world.y, config);
+               const key = getHexKey(q, r);
+               if (hoverHex !== key) setHoverHex(key);
+               
+               if (activeTool === EditorTool.RULER && rulerStart) {
+                   setRulerCurrent({q, r});
+               }
+               else if (activeTool === EditorTool.PAINT || activeTool === EditorTool.ERASE) {
+                   applyTool(e);
+               }
           }
       }
   };
@@ -503,42 +544,47 @@ export const HexCanvas: React.FC<HexCanvasProps> = ({
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const world = screenToWorld(e.clientX, e.clientY, viewport, rect);
-      const { q, r } = pixelToHex(world.x, world.y, config);
-      const key = getHexKey(q, r);
+      const centerCell = GridSystem.getGridCoordinates(world.x, world.y, config);
+      
+      // Phase 1: AoE Calculation - Now via GridSystem
+      let targetCells = [centerCell];
+      if ((activeTool === EditorTool.PAINT || activeTool === EditorTool.ERASE) && brushSize > 1) {
+          targetCells = GridSystem.getNeighbors(centerCell, brushSize - 1, config);
+      }
 
       if (activeTool === EditorTool.PAINT) {
           setHexData(prev => {
               const next = new Map(prev);
-              const current = next.get(key) || HexState.EMPTY;
-              let nextState = HexState.BLOCKED;
-              
-              if (dragRef.current?.type === 'tool' && e.type === 'pointermove') {
-                   next.set(key, HexState.BLOCKED);
-              } else {
-                   if (current === HexState.BLOCKED) nextState = HexState.DIFFICULT;
-                   else if (current === HexState.DIFFICULT) nextState = HexState.WATER;
-                   else if (current === HexState.WATER) nextState = HexState.EMPTY;
-                   else nextState = HexState.BLOCKED;
-                   
-                   if (nextState === HexState.EMPTY) next.delete(key);
-                   else next.set(key, nextState);
-              }
+              targetCells.forEach(cell => {
+                  const key = getHexKey(cell.q, cell.r);
+                  if (activeTerrain === HexState.EMPTY) {
+                      // "Clear" means reset terrain but keep grid visible (remove from map if map stores terrain)
+                      if (next.has(key)) next.delete(key);
+                  } else {
+                      next.set(key, activeTerrain);
+                  }
+              });
               return next;
           });
       } else if (activeTool === EditorTool.ERASE) {
           setHexData(prev => {
               const next = new Map(prev);
-              next.set(key, HexState.HIDDEN);
+              targetCells.forEach(cell => {
+                  const key = getHexKey(cell.q, cell.r);
+                  next.set(key, HexState.HIDDEN);
+              });
               return next;
           });
       } else if (activeTool === EditorTool.LABEL) {
+           const key = getHexKey(centerCell.q, centerCell.r);
            setMarkers(prev => {
               const next = new Map(prev);
               if (next.has(key)) next.delete(key);
-              else next.set(key, { text: activeLabel, color: '#fff' });
+              else next.set(key, { text: activeLabel, color: activeMarkerColor });
               return next;
           });
       } else if (activeTool === EditorTool.ASSET) {
+           const key = getHexKey(centerCell.q, centerCell.r);
            setAssets(prev => {
               const next = new Map(prev);
               if (next.has(key)) next.delete(key);

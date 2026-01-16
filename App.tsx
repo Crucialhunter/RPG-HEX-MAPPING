@@ -1,11 +1,13 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Controls } from './components/Controls';
 import { HexCanvas } from './components/HexCanvas';
 import { Dashboard } from './components/Dashboard';
-import { GridConfig, HexState, EditorTool, Viewport, Marker, Asset, ProjectData, NavigationMode, Point } from './types';
+import { GridConfig, HexState, EditorTool, Viewport, Marker, Asset, ProjectData, NavigationMode, Point, GridType } from './types';
 import { saveProject } from './utils/storage';
 
 const INITIAL_CONFIG: GridConfig = {
+  type: GridType.HEX_FLAT,
   radius: 40,
   offsetX: 0,
   offsetY: 0,
@@ -28,6 +30,7 @@ export default function App() {
   
   // Project State
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [folderId, setFolderId] = useState<string | undefined>(undefined);
   const [projectName, setProjectName] = useState("Untitled Project");
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageBlob, setImageBlob] = useState<Blob | null>(null); 
@@ -36,6 +39,14 @@ export default function App() {
   // Tool State
   const [config, setConfig] = useState<GridConfig>(INITIAL_CONFIG);
   const [viewport, setViewport] = useState<Viewport>(INITIAL_VIEWPORT);
+  
+  // Phase 1: New Tool States
+  const [activeTool, setActiveTool] = useState<EditorTool>(EditorTool.MOVE);
+  const [activeTerrain, setActiveTerrain] = useState<HexState>(HexState.BLOCKED);
+  const [brushSize, setBrushSize] = useState<number>(1);
+  const [activeLabel, setActiveLabel] = useState<string>("P1");
+  const [activeMarkerColor, setActiveMarkerColor] = useState<string>("#ffffff");
+  const [activeAssetType, setActiveAssetType] = useState<string>('chest');
   
   // Data State with History
   const [hexData, setHexData] = useState<Map<string, HexState>>(new Map());
@@ -46,9 +57,6 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   // UI State
-  const [activeTool, setActiveTool] = useState<EditorTool>(EditorTool.MOVE);
-  const [activeLabel, setActiveLabel] = useState<string>("P1");
-  const [activeAssetType, setActiveAssetType] = useState<string>('chest');
   const [saveStatus, setSaveStatus] = useState("Saved");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +98,7 @@ export default function App() {
     
     const project: ProjectData = {
         id: projectId,
+        folderId: folderId,
         name: projectName,
         lastModified: Date.now(),
         imageBlob: imageBlob,
@@ -107,7 +116,7 @@ export default function App() {
         console.error("Save failed", e);
         setSaveStatus("Error");
     }
-  }, [projectId, projectName, imageBlob, imageOrigin, config, hexData, markers, assets]);
+  }, [projectId, folderId, projectName, imageBlob, imageOrigin, config, hexData, markers, assets]);
 
   useEffect(() => {
     if (view !== 'editor') return;
@@ -117,13 +126,14 @@ export default function App() {
         saveData();
     }, 2000);
     return () => { if(saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current) };
-  }, [config, hexData, markers, assets, imageOrigin, saveData, view]);
+  }, [config, hexData, markers, assets, imageOrigin, saveData, view, projectName]);
 
 
   // --- Event Handlers ---
 
-  const handleCreateNew = () => {
+  const handleCreateNew = (targetFolderId?: string) => {
       setProjectId(crypto.randomUUID());
+      setFolderId(targetFolderId);
       setProjectName("New Battlemap " + new Date().toLocaleDateString());
       setImage(null);
       setImageBlob(null);
@@ -141,8 +151,9 @@ export default function App() {
 
   const handleSelectProject = (p: ProjectData) => {
       setProjectId(p.id);
+      setFolderId(p.folderId);
       setProjectName(p.name);
-      setConfig(p.config);
+      setConfig({ ...INITIAL_CONFIG, ...p.config }); // Merge with initial to ensure new properties exist
       setImageOrigin(p.imageOrigin || INITIAL_IMAGE_ORIGIN); // Fallback for old projects
       setHexData(new Map(p.hexData));
       setMarkers(new Map(p.markers));
@@ -219,6 +230,11 @@ export default function App() {
           canRedo={historyIndex < history.length - 1}
           onUndo={handleUndo}
           onRedo={handleRedo}
+          // New Props
+          activeTerrain={activeTerrain} setActiveTerrain={setActiveTerrain}
+          brushSize={brushSize} setBrushSize={setBrushSize}
+          activeMarkerColor={activeMarkerColor} setActiveMarkerColor={setActiveMarkerColor}
+          projectName={projectName} setProjectName={setProjectName}
         />
 
          <HexCanvas 
@@ -236,6 +252,10 @@ export default function App() {
             activeAssetType={activeAssetType}
             exportRef={triggerExportRef}
             onDataChange={pushHistory} 
+            // New Props
+            activeTerrain={activeTerrain}
+            brushSize={brushSize}
+            activeMarkerColor={activeMarkerColor}
          />
     </div>
   );

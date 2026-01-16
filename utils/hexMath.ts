@@ -1,3 +1,4 @@
+
 import { AxialCoord, Point, Viewport, GridConfig } from '../types';
 
 const SQRT_3 = Math.sqrt(3);
@@ -106,4 +107,15 @@ export const screenToWorld = (screenX: number, screenY: number, viewport: Viewpo
 
 export const getHexDistance = (a: AxialCoord, b: AxialCoord): number => {
   return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
+};
+
+// Get all hexes within N steps of center (Range 0 = center only)
+export const getHexRange = (center: AxialCoord, range: number): AxialCoord[] => {
+  const results: AxialCoord[] = [];
+  for (let q = -range; q <= range; q++) {
+    for (let r = Math.max(-range, -q - range); r <= Math.min(range, -q + range); r++) {
+      results.push({ q: center.q + q, r: center.r + r });
+    }
+  }
+  return results;
 };
