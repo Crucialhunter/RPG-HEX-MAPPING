@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Grid, Download, Plus, Play, Trash2, Undo2, Map as MapIcon, ChevronRight, Languages, Check, Folder as FolderIcon, FolderOpen, ArrowLeft, MoreHorizontal, FileOutput, Archive, Flame, RefreshCcw, AlertTriangle } from 'lucide-react';
+import { Upload, Grid, Download, Plus, Play, Trash2, Undo2, Map as MapIcon, ChevronRight, Languages, Check, Folder as FolderIcon, FolderOpen, ArrowLeft, MoreHorizontal, FileOutput, Archive, Flame, RefreshCcw, AlertTriangle, Scan, Target, MousePointer2 } from 'lucide-react';
 import { ProjectData, Folder } from '../types';
 import { getAllProjects, deleteProject, saveProject, getAllFolders, saveFolder, deleteFolder } from '../utils/storage';
 
@@ -9,6 +9,195 @@ interface DashboardProps {
   onSelectProject: (p: ProjectData) => void;
   onCreateNew: (folderId?: string) => void;
 }
+
+// --- HERO SECTION COMPONENT ---
+const HeroSection: React.FC<{ onCreateNew: () => void }> = ({ onCreateNew }) => {
+  return (
+    <section className="relative w-full mb-16 pt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        
+        {/* LEFT COLUMN: Actions & Text */}
+        <div className="flex flex-col items-start z-10">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-3 py-1 mb-6 rounded-full bg-cyan-950/30 border border-cyan-500/30 text-[10px] font-bold tracking-widest text-cyan-400 uppercase shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            Product-Led Design
+          </motion.div>
+
+          <motion.h1 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="text-5xl md:text-7xl font-black text-white leading-tight mb-4 tracking-tight"
+          >
+            Order from <span className="text-transparent bg-clip-text bg-gradient-to-r from-slate-400 to-slate-700">Chaos.</span>
+          </motion.h1>
+
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="text-lg text-slate-400 max-w-lg mb-10 leading-relaxed"
+          >
+            Transform raw map images into tactical, VTT-ready gridded overlays in seconds. Align, calibrate, and dominate your tabletop sessions.
+          </motion.p>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="flex flex-wrap gap-4 w-full max-w-lg"
+          >
+            {/* Quick Action: UPLOAD */}
+            <button 
+              onClick={() => onCreateNew()}
+              className="group flex-1 h-24 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-cyan-500/50 rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 relative overflow-hidden"
+            >
+               <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+               <div className="p-2 rounded-lg bg-slate-800 group-hover:bg-cyan-950 text-slate-400 group-hover:text-cyan-400 transition-colors">
+                  <Upload size={24} strokeWidth={1.5} />
+               </div>
+               <span className="text-xs font-bold tracking-wider text-slate-400 group-hover:text-white transition-colors">UPLOAD MAP</span>
+            </button>
+
+            {/* Quick Action: CALIBRATE */}
+            <button 
+               onClick={() => onCreateNew()} // Directs to new project for demo flow
+               className="group flex-1 h-24 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-indigo-500/50 rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 relative overflow-hidden"
+            >
+               <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+               <div className="p-2 rounded-lg bg-slate-800 group-hover:bg-indigo-950 text-slate-400 group-hover:text-indigo-400 transition-colors">
+                  <Target size={24} strokeWidth={1.5} />
+               </div>
+               <span className="text-xs font-bold tracking-wider text-slate-400 group-hover:text-white transition-colors">CALIBRATE</span>
+            </button>
+
+            {/* Quick Action: EXPORT */}
+            <button 
+               onClick={() => onCreateNew()} // Directs to new project for demo flow
+               className="group flex-1 h-24 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-purple-500/50 rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 relative overflow-hidden"
+            >
+               <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+               <div className="p-2 rounded-lg bg-slate-800 group-hover:bg-purple-950 text-slate-400 group-hover:text-purple-400 transition-colors">
+                  <Download size={24} strokeWidth={1.5} />
+               </div>
+               <span className="text-xs font-bold tracking-wider text-slate-400 group-hover:text-white transition-colors">EXPORT PNG</span>
+            </button>
+          </motion.div>
+        </div>
+
+        {/* RIGHT COLUMN: The Scanner Animation */}
+        <div className="relative h-80 lg:h-96 w-full z-0">
+          {/* Glass Container */}
+          <motion.div 
+             initial={{ opacity: 0, scale: 0.95 }}
+             animate={{ opacity: 1, scale: 1 }}
+             transition={{ duration: 0.7, delay: 0.2 }}
+             className="absolute inset-0 rounded-2xl bg-slate-900/40 backdrop-blur-md border border-white/10 overflow-hidden shadow-2xl shadow-cyan-900/20"
+          >
+             {/* Background Grid inside Scanner */}
+             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
+             
+             {/* Decorative UI Elements */}
+             <div className="absolute top-4 left-4 flex gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500/50" />
+                <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
+                <div className="w-2 h-2 rounded-full bg-green-500/50" />
+             </div>
+             <div className="absolute bottom-4 right-6 text-[10px] font-mono text-cyan-700/60 tracking-widest">
+                SYSTEM_READY // V.2.0.4
+             </div>
+
+             {/* Center Content Area */}
+             <div className="absolute inset-0 flex items-center justify-center">
+                
+                {/* 1. Raw Data State (Base Layer) */}
+                <div className="relative z-0 flex flex-col items-center gap-4 opacity-40 blur-[1px]">
+                   <MapIcon size={64} className="text-slate-600" />
+                   <div className="text-slate-500 font-mono text-sm tracking-[0.2em] font-bold">RAW IMAGE DATA</div>
+                   <div className="flex gap-1 mt-2">
+                      <div className="w-16 h-1 bg-slate-700 rounded-full" />
+                      <div className="w-8 h-1 bg-slate-700 rounded-full" />
+                   </div>
+                </div>
+
+                {/* 2. Calibrated State (Revealed Layer) */}
+                <motion.div 
+                   className="absolute inset-0 z-10 bg-slate-900/80 flex flex-col items-center justify-center gap-4"
+                   animate={{ 
+                      clipPath: ["inset(0 100% 0 0)", "inset(0 0% 0 0)", "inset(0 0% 0 0)", "inset(0 100% 0 0)"] 
+                   }}
+                   transition={{ 
+                      duration: 4, 
+                      ease: "easeInOut", 
+                      repeat: Infinity,
+                      repeatDelay: 1
+                   }}
+                >
+                   {/* Grid Overlay Effect on Reveal */}
+                   <div className="absolute inset-0 bg-[size:20px_20px] bg-[linear-gradient(rgba(6,182,212,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.1)_1px,transparent_1px)]"></div>
+                   
+                   <div className="relative">
+                      <Grid size={64} className="text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]" />
+                      <motion.div 
+                        animate={{ opacity: [0, 1, 0] }}
+                        transition={{ duration: 1, repeat: Infinity }}
+                        className="absolute -top-2 -right-2 text-cyan-300"
+                      >
+                         <Target size={16} />
+                      </motion.div>
+                   </div>
+                   
+                   <div className="text-cyan-400 font-mono text-xl tracking-[0.2em] font-bold drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]">
+                      CALIBRATED
+                   </div>
+                   
+                   <div className="flex gap-1 mt-2">
+                      <div className="w-16 h-1 bg-cyan-500 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
+                      <div className="w-8 h-1 bg-cyan-500 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
+                   </div>
+                </motion.div>
+
+                {/* 3. The Scanning Line */}
+                <motion.div 
+                   className="absolute top-0 bottom-0 w-[2px] bg-cyan-400 z-20 shadow-[0_0_40px_3px_rgba(6,182,212,0.6)]"
+                   animate={{ left: ["0%", "100%", "100%", "0%"] }}
+                   transition={{ 
+                      duration: 4, 
+                      ease: "easeInOut", 
+                      repeat: Infinity,
+                      repeatDelay: 1
+                   }}
+                >
+                   <div className="absolute top-0 bottom-0 -left-12 w-24 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent"></div>
+                </motion.div>
+
+                {/* 4. Radar Ripples */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                   <motion.div 
+                      className="w-32 h-32 rounded-full border border-cyan-500/30"
+                      animate={{ scale: [0.8, 2], opacity: [0, 1, 0] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+                   />
+                   <motion.div 
+                      className="w-32 h-32 rounded-full border border-indigo-500/30 absolute"
+                      animate={{ scale: [0.8, 2], opacity: [0, 1, 0] }}
+                      transition={{ duration: 2, delay: 0.5, repeat: Infinity, ease: "easeOut" }}
+                   />
+                </div>
+
+             </div>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject, onCreateNew }) => {
   const [projects, setProjects] = useState<ProjectData[]>([]);
@@ -374,12 +563,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject, onCreateN
             <>
                 {/* --- HERO SECTION (Only on Root) --- */}
                 {!activeFolderId && (
-                    <div className="mb-12">
-                        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-white">
+                   <HeroSection onCreateNew={() => onCreateNew()} />
+                )}
+
+                {/* --- HERO SECTION HEADER (Previous) --- */}
+                {!activeFolderId && (
+                    <div className="mb-8 border-b border-white/5 pb-4">
+                        <h1 className="text-2xl font-bold tracking-tight mb-2 text-white">
                             Command Center
                         </h1>
-                        <p className="text-lg text-slate-400 max-w-2xl">
-                            Organize your campaigns, calibrate maps, and prepare for your next session.
+                        <p className="text-sm text-slate-500 max-w-2xl">
+                            Active campaigns and recent operations.
                         </p>
                     </div>
                 )}
